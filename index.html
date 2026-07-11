@@ -1,0 +1,90 @@
+import streamlit as st
+import pandas as pd
+import plotly.express as px
+
+# ตั้งค่าหน้าเว็บ
+st.set_page_config(
+    page_title="ระบบประเมินการตลาดเกษตรอัจฉริยะ",
+    page_icon="🌾",
+    layout="wide"
+)
+
+# ส่วนหัวของเว็บไซต์
+st.title("🌾 ระบบประเมินการตลาดเกษตรอัจฉริยะ (Smart Agri-Marketing Evaluation)")
+st.write("เครื่องมือช่วยเกษตรกรวิเคราะห์ต้นทุน กำไร และประเมินช่องทางการตลาดที่คุ้มค่าที่สุด")
+
+# ส่วนรับข้อมูลจากผู้ใช้ (Sidebar)
+st.sidebar.header("📋 กรอกข้อมูลการผลิต")
+crop_name = st.sidebar.text_input("ชื่อพืชผล/ผลผลิต", "ข้าวหอมมะลิ")
+yield_amount = st.sidebar.number_input("ปริมาณผลผลิตทั้งหมด (กิโลกรัม)", min_value=1, value=1000)
+total_cost = st.sidebar.number_input("ต้นทุนการผลิตทั้งหมด (บาท)", min_value=1, value=15000)
+
+st.sidebar.header("💰 ราคาขายแยกตามช่องทาง (บาท/กก.)")
+price_direct = st.sidebar.number_input("1. ขายตรงให้ผู้บริโภค (Direct)", min_value=0.0, value=35.0)
+price_online = st.sidebar.number_input("2. ขายผ่านออนไลน์ (Online/Delivery)", min_value=0.0, value=40.0)
+price_wholesale = st.sidebar.number_input("3. ขายส่งโรงงาน/พ่อค้าคนกลาง (Wholesale)", min_value=0.0, value=25.0)
+
+# คำนวณต้นทุนต่อหน่วย
+cost_per_kg = total_cost / yield_amount
+
+# สร้าง DataFrame สำหรับเปรียบเทียบข้อมูล
+marketing_data = {
+    "ช่องทางการตลาด": ["ขายตรง (Direct)", "ขายออนไลน์ (Online)", "ขายส่ง (Wholesale)"],
+    "ราคาขาย (บาท/กก.)": [price_direct, price_online, price_wholesale],
+    "ต้นทุนผลิต (บาท/กก.)": [cost_per_kg, cost_per_kg, cost_per_kg]
+}
+df = pd.DataFrame(marketing_data)
+
+# คำนวณกำไร
+df["กำไรสุทธิ (บาท/กก.)"] = df["ราคาขาย (บาท/กก.)"] - df["ต้นทุนผลิต (บาท/กก.)"]
+df["รายได้ทั้งหมด (บาท)"] = df["ราคาขาย (บาท/กก.)"] * yield_amount
+df["กำไรทั้งหมด (บาท)"] = df["รายได้ทั้งหมด (บาท)"] - total_cost
+df["ROI (%)"] = (df["กำไรทั้งหมด (บาท)"] / total_cost) * 100
+
+# แสดงผลการวิเคราะห์
+col1, col2 = st.columns([1, 2])
+
+with col1:
+    st.subheader("📊 สรุปผลการประเมิน")
+    st.metric(label="พืชผลที่ประเมิน", value=crop_name)
+    st.metric(label="ต้นทุนเฉลี่ยของคุณ", value=f"{cost_per_kg:.2f} บาท/กก.")
+    
+    # หาช่องทางที่กำไรดีที่สุด
+    best_channel = df.loc[df["กำไรทั้งหมด (บาท)"].idxmax()]["ช่องทางการตลาด"]
+    max_profit = df["กำไรทั้งหมด (บาท)"].max()
+    st.success(f"💡 ช่องทางที่แนะนำ: **{best_channel}** (คาดการณ์กำไร {max_profit:,.2f} บาท)")
+
+with col2:
+    st.subheader("📈 ตารางเปรียบเทียบช่องทางขาย")
+    st.dataframe(df.style.format({
+        "ราคาขาย (บาท/กก.)": "{:.2f}",
+        "ต้นทุนผลิต (บาท/กก.)": "{:.2f}",
+        "กำไรสุทธิ (บาท/กก.)": "{:.2f}",
+        "รายได้ทั้งหมด (บาท)": "{:,.2f}",
+        "กำไรทั้งหมด (บาท)": "{:,.2f}",
+        "ROI (%)": "{:.2f}%"
+    }), use_container_width=True)
+
+# ส่วนของกราฟวิเคราะห์
+st.markdown("---")
+st.subheader("📊 กราฟเปรียบเทียบกำไรสุทธิทั้งหมด (บาท)")
+
+fig = px.bar(
+    df, 
+    x="ช่องทางการตลาด", 
+    y="กำไรทั้งหมด (บาท)", 
+    color="ช่องทางการตลาด",
+    text_auto=',.2f',
+    title=f"การเปรียบเทียบผลตอบแทนจากการขาย {crop_name}"
+)
+st.plotly_chart(fig, use_container_width=True)
+
+# ส่วนคำแนะนำเพิ่มเติมเชิงอัจฉริยะ (Smart Insight)
+st.subheader("🤖 คำแนะนำอัจฉริยะ (Smart Insights)")
+for index, row in df.iterrows():
+    if row["กำไรสุทธิ (บาท/กก.)"] <= 0:
+        st.error(f"⚠️ ช่องทาง **{row['ช่องทางการตลาด']}**: กำลังขาดทุน! ควรลดต้นทุนหรือปรับราคาขายเพิ่มขึ้น")
+    elif row["ROI (%)"] > 50:
+        st.info(f"🚀 ช่องทาง **{row['ช่องทางการตลาด']}**: มีอัตราผลตอบแทน (ROI) สูงมาก เหมาะกับการลงทุนขยายตลาดเพิ่ม")
+    else:
+        st.warning(f"⚖️ ช่องทาง **{row['ช่องทางการตลาด']}**: ทำกำไรได้ปานกลาง เหมาะสำหรับกระจายความเสี่ยง")
